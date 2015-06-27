@@ -9,7 +9,6 @@
 #import "ViewController.h"
 #import "PhotoTakerViewController.h"
 #import "MyImgPickerController.h"
-#import "PlayerViewController.h"
 
 #import "UIView+ZCLQuickControl.h"
 
@@ -22,6 +21,7 @@
     UIButton *_btn;
     UIButton *_test;
     UIButton *_player;
+    UIButton *_library;
     MPMoviePlayerViewController *_mpVC;
     
     NSString *_outputFielPathLow;
@@ -99,9 +99,9 @@
 - (void)playClick:(UIButton *)button
 {
     NSFileManager *fileManager = [[NSFileManager alloc] init];
-    if([fileManager fileExistsAtPath:_outputFielPathLow])
+    if([fileManager fileExistsAtPath:_outputFilePath])
     {
-        _mpVC = [[MPMoviePlayerViewController alloc] initWithContentURL:[NSURL fileURLWithPath:_outputFielPathLow]];
+        _mpVC = [[MPMoviePlayerViewController alloc] initWithContentURL:[NSURL fileURLWithPath:_outputFilePath]];
         _mpVC.moviePlayer.controlStyle = MPMovieControlStyleDefault;
         _mpVC.moviePlayer.scalingMode = MPMovieScalingModeNone;
         UIButton *exitBtn = [_mpVC.view addSystemButtonAtNormalStateWithFrame:CGRectMake(10, 30, 50, 23) title:@"back" titleColor:[UIColor whiteColor] fontSize:15 fontName:nil aligmentType:NSTextAlignmentCenter];

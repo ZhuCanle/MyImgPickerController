@@ -20,7 +20,6 @@
 		ED19835C1B3BE9D300B78838 /* PhotoTakerViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ED19835B1B3BE9D300B78838 /* PhotoTakerViewController.m */; };
 		ED19835E1B3BEAD300B78838 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ED19835D1B3BEAD300B78838 /* AVFoundation.framework */; };
 		ED1983601B3BEE0E00B78838 /* AssetsLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ED19835F1B3BEE0E00B78838 /* AssetsLibrary.framework */; };
-		ED1E3F241B3E3F3300499A0D /* PlayerViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ED1E3F231B3E3F3300499A0D /* PlayerViewController.m */; };
 		ED1E3F261B3E3FA500499A0D /* MediaPlayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ED1E3F251B3E3FA500499A0D /* MediaPlayer.framework */; };
 		ED20D5011B3D34AE00FAF071 /* TGViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ED20D5001B3D34AE00FAF071 /* TGViewController.m */; };
 		ED20D5041B3D3EA700FAF071 /* red-button-for-web.jpg in Resources */ = {isa = PBXBuildFile; fileRef = ED20D5021B3D3EA700FAF071 /* red-button-for-web.jpg */; };
@@ -67,8 +66,6 @@
 		ED19835B1B3BE9D300B78838 /* PhotoTakerViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PhotoTakerViewController.m; sourceTree = "<group>"; };
 		ED19835D1B3BEAD300B78838 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		ED19835F1B3BEE0E00B78838 /* AssetsLibrary.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AssetsLibrary.framework; path = System/Library/Frameworks/AssetsLibrary.framework; sourceTree = SDKROOT; };
-		ED1E3F221B3E3F3300499A0D /* PlayerViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PlayerViewController.h; sourceTree = "<group>"; };
-		ED1E3F231B3E3F3300499A0D /* PlayerViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PlayerViewController.m; sourceTree = "<group>"; };
 		ED1E3F251B3E3FA500499A0D /* MediaPlayer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaPlayer.framework; path = System/Library/Frameworks/MediaPlayer.framework; sourceTree = SDKROOT; };
 		ED20D4FF1B3D34AE00FAF071 /* TGViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TGViewController.h; sourceTree = "<group>"; };
 		ED20D5001B3D34AE00FAF071 /* TGViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TGViewController.m; sourceTree = "<group>"; };
@@ -125,7 +122,6 @@
 		ED1983151B3B9DC100B78838 = {
 			isa = PBXGroup;
 			children = (
-				ED1E3F211B3E3EF200499A0D /* PlayerViewController */,
 				ED1983201B3B9DC100B78838 /* MyImgPickerController */,
 				ED19833A1B3B9DC100B78838 /* MyImgPickerControllerTests */,
 				ED19831F1B3B9DC100B78838 /* Products */,
@@ -151,6 +147,7 @@
 				ED20D5071B3D42E400FAF071 /* 0834192.png */,
 				ED20D5021B3D3EA700FAF071 /* red-button-for-web.jpg */,
 				ED20D5031B3D3EA700FAF071 /* green-button-for-web.jpg */,
+				ED1E3F271B3EA0A600499A0D /* LibraryViewController */,
 				ED20D4FE1B3D348600FAF071 /* TG */,
 				ED1983531B3BB6C000B78838 /* MyImgPickerController */,
 				ED19834F1B3BA15900B78838 /* ZCLImagePickerController */,
@@ -214,13 +211,11 @@
 			name = MyImgPickerController;
 			sourceTree = "<group>";
 		};
-		ED1E3F211B3E3EF200499A0D /* PlayerViewController */ = {
+		ED1E3F271B3EA0A600499A0D /* LibraryViewController */ = {
 			isa = PBXGroup;
 			children = (
-				ED1E3F221B3E3F3300499A0D /* PlayerViewController.h */,
-				ED1E3F231B3E3F3300499A0D /* PlayerViewController.m */,
 			);
-			name = PlayerViewController;
+			name = LibraryViewController;
 			sourceTree = "<group>";
 		};
 		ED20D4FE1B3D348600FAF071 /* TG */ = {
@@ -380,7 +375,6 @@
 				ED1983241B3B9DC100B78838 /* main.m in Sources */,
 				ED19834E1B3BA05400B78838 /* UIView+ZCLQuickControl.m in Sources */,
 				ED20D5011B3D34AE00FAF071 /* TGViewController.m in Sources */,
-				ED1E3F241B3E3F3300499A0D /* PlayerViewController.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

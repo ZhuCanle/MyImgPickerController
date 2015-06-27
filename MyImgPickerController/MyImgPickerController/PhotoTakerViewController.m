@@ -134,7 +134,7 @@
     _captureSession = [[AVCaptureSession alloc] init];
     if([_captureSession canSetSessionPreset:AVCaptureSessionPreset352x288])
     {
-        _captureSession.sessionPreset = AVCaptureSessionPreset352x288;
+        _captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     }
     // 获得输入设备
     // 视频输入设备
@@ -145,9 +145,9 @@
     }
     //[videoCaptureDevice unlockForConfiguration];
     [videoCaptureDevice lockForConfiguration:nil];
-    //NSLog(@"",videoCaptureDevice.fr)
-    //[videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
-    //[videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
+    videoCaptureDevice.activeFormat = 
+    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
+    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
     [videoCaptureDevice unlockForConfiguration];
     // 音频输入设备
     AVCaptureDevice *audioCaptureDevice = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeAudio] firstObject];
