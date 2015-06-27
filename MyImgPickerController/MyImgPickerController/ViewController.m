@@ -99,9 +99,9 @@
 - (void)playClick:(UIButton *)button
 {
     NSFileManager *fileManager = [[NSFileManager alloc] init];
-    if([fileManager fileExistsAtPath:_outputFilePath])
+    if([fileManager fileExistsAtPath:_outputFielPathLow])
     {
-        _mpVC = [[MPMoviePlayerViewController alloc] initWithContentURL:[NSURL fileURLWithPath:_outputFilePath]];
+        _mpVC = [[MPMoviePlayerViewController alloc] initWithContentURL:[NSURL fileURLWithPath:_outputFielPathLow]];
         _mpVC.moviePlayer.controlStyle = MPMovieControlStyleDefault;
         _mpVC.moviePlayer.scalingMode = MPMovieScalingModeNone;
         UIButton *exitBtn = [_mpVC.view addSystemButtonAtNormalStateWithFrame:CGRectMake(10, 30, 50, 23) title:@"back" titleColor:[UIColor whiteColor] fontSize:15 fontName:nil aligmentType:NSTextAlignmentCenter];

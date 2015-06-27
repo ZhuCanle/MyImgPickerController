@@ -23,6 +23,8 @@
     AVCaptureDeviceInput *_audioCaptureDeviceInput;
     AVCaptureMovieFileOutput *_captureMovieFileOutput;//音频输出流
     AVCaptureVideoPreviewLayer *_captureVideoPreviewLayer;//相机拍摄预览图层
+    AVAssetWriter *_writer;
+    AVAssetWriterInput *_writerInput;
     
     UIButton *_recordBtn;
     UIProgressView *_filmProgress;
@@ -130,7 +132,7 @@
 {
     // 初始化会话
     _captureSession = [[AVCaptureSession alloc] init];
-    if([_captureSession canSetSessionPreset:AVCaptureSessionPresetMedium])
+    if([_captureSession canSetSessionPreset:AVCaptureSessionPreset352x288])
     {
         _captureSession.sessionPreset = AVCaptureSessionPreset352x288;
     }
@@ -144,8 +146,8 @@
     //[videoCaptureDevice unlockForConfiguration];
     [videoCaptureDevice lockForConfiguration:nil];
     //NSLog(@"",videoCaptureDevice.fr)
-    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
-    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
+    //[videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
+    //[videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
     [videoCaptureDevice unlockForConfiguration];
     // 音频输入设备
     AVCaptureDevice *audioCaptureDevice = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeAudio] firstObject];
@@ -263,6 +265,20 @@
     else{
         [_captureMovieFileOutput stopRecording];//停止录制
     }
+//    NSError *error = nil;
+//    _writer = [[AVAssetWriter alloc] initWithURL:[NSURL fileURLWithPath:_outputFielPath] fileType:AVFileTypeQuickTimeMovie error:&error];
+//    NSParameterAssert(_writer);
+//    if(error)
+//    {
+//        NSLog(@"%@",[error localizedDescription]);
+//    }
+//    CGSize size = CGSizeMake(352, 288);
+//    NSDictionary *videoCompressionProps = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithDouble:128.0*1024.0],AVVideoAverageBitRateKey,nil];
+//    NSDictionary *videoSettings = [NSDictionary dictionaryWithObjectsAndKeys:AVVideoCodecH264, AVVideoCodecKey,[NSNumber numberWithInt:size.width], AVVideoWidthKey,[NSNumber numberWithInt:size.height],AVVideoHeightKey,videoCompressionProps, AVVideoCompressionPropertiesKey, nil];
+//    _writerInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
+//    NSParameterAssert(_writerInput);
+//    _writerInput.expectsMediaDataInRealTime = YES;
+//    NSDictionary *sourcePixelBufferAttributesDictionary = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:kCVPixelFormatType_32ARGB],kCVPixelBufferPixelFormatTypeKey, nil];
 }
 
 // 代理方法
@@ -304,12 +320,12 @@
 - (void)finishRecord
 {
     [_captureMovieFileOutput stopRecording];//停止录制
-    _filmProgress.progress = 0;
+
 //    // 压缩视频
     NSFileManager *fileManager = [[NSFileManager alloc] init];
     if([fileManager fileExistsAtPath:_outputFilePathLow])
     {
-        //[fileManager removeItemAtPath:_outputFilePathLow error:nil];
+        [fileManager removeItemAtPath:_outputFilePathLow error:nil];
     }
     if([fileManager fileExistsAtPath:_outputFielPath])
     {
@@ -328,26 +344,61 @@
     }];
     
     // 获取文件大小
-    long fileSizeKB = [[fileManager attributesOfItemAtPath:_outputFielPath error:nil] fileSize];
-    double fileSizeMB = fileSizeKB/1024.0;
-    NSNumber *fileSize = [NSNumber numberWithDouble:fileSizeMB];
+    long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFielPath error:nil] fileSize];
+    double fileSizeKB = fileSizeB/1024.0;
     
-    _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"文件录制完成，视频大小%@MB",fileSize] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
+    _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"文件录制完成，视频大小%.5fKB",fileSizeKB] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
     [_finishAlert show];
 }
 
 // 调用此方法压缩视频
-- (void) lowQuailtyWithInputURL:(NSURL*)inputURL
-                      outputURL:(NSURL*)outputURL
-                   blockHandler:(void (^)(AVAssetExportSession*))handler
+- (void)lowQuailtyWithInputURL:(NSURL*)inputURL outputURL:(NSURL*)outputURL blockHandler:(void (^)(AVAssetExportSession*))handler
 {
     AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:inputURL options:nil];
+
     AVAssetExportSession *session = [[AVAssetExportSession alloc] initWithAsset:asset presetName:AVAssetExportPresetMediumQuality];
     session.outputURL = outputURL;
-    session.outputFileType = AVFileTypeMPEG4;
+    session.outputFileType = AVFileTypeQuickTimeMovie;
+    session.shouldOptimizeForNetworkUse = YES;
     [session exportAsynchronouslyWithCompletionHandler:^(void)
      {
          handler(session);
+         switch (session.status) {
+                 
+             case AVAssetExportSessionStatusUnknown:
+                 
+                 NSLog(@"AVAssetExportSessionStatusUnknown");
+                 
+                 break;
+                 
+             case AVAssetExportSessionStatusWaiting:
+                 
+                 NSLog(@"AVAssetExportSessionStatusWaiting");
+                 
+                 break;
+                 
+             case AVAssetExportSessionStatusExporting:
+                 
+                 NSLog(@"AVAssetExportSessionStatusExporting");
+                 
+                 break;
+                 
+             case AVAssetExportSessionStatusCompleted:
+                 
+                 NSLog(@"AVAssetExportSessionStatusCompleted");
+                 
+                 break;
+                 
+             case AVAssetExportSessionStatusFailed:
+                 
+                 NSLog(@"AVAssetExportSessionStatusFailed");
+                 
+                 break;
+            case AVAssetExportSessionStatusCancelled:
+                 NSLog(@"AVAssetExportSessionStatusCancelled");
+                 break;
+                 
+         }
      }];
 }
 
@@ -419,7 +470,11 @@
     
     if(_filmProgress.progress==1)
     {
+        [_progressTimer invalidate];
         [self finishRecord];
+        [UIView animateWithDuration:0.2 animations:^{
+            _releaseLabel.alpha = 0;
+        }];
     }
 }
 
@@ -439,6 +494,7 @@
         {
             case 0:
             {
+                _filmProgress.progress = 0;
                 break;
             }
             case 1:
