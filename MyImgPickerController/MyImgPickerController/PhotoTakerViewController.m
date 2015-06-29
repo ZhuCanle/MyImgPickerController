@@ -11,12 +11,12 @@
 #import "UIView+ZCLQuickControl.h"
 
 #import <Masonry.h>
-#import <TGCameraViewController.h>
+#import <SVProgressHUD.h>
 
 #define MAX_RECORD_TIME 15
 #define PROGRESS_MOVE_PERTIME 0.0006667
 
-@interface PhotoTakerViewController () <UIAlertViewDelegate>
+@interface PhotoTakerViewController () <UIAlertViewDelegate,AVCaptureFileOutputRecordingDelegate>
 {
     AVCaptureSession *_captureSession;//会话，负责输入和输出设备之间的数据传递
     AVCaptureDeviceInput *_videoCaptureDeviceInput;//负责从AVCaptureDevice获得输入数据
@@ -31,8 +31,11 @@
     NSTimer *_progressTimer;
     UILabel *_releaseLabel;
     UIAlertView *_finishAlert;
+    UIView *_darkView;
     NSString *_outputFielPath;// 原视频文件输出路径
     NSString *_outputFilePathLow;// 压缩后视频文件输出路径
+    BOOL _isProcessingData;
+    BOOL _isCancel;// 取消录制标记（取消录制操作后不进行视频裁剪和压缩处理）
 }
 
 @end
@@ -47,6 +50,8 @@
     // Do any additional setup after loading the view.
     _outputFielPath = [NSTemporaryDirectory() stringByAppendingString:@"myMovie.mov"];
     _outputFilePathLow = [NSTemporaryDirectory() stringByAppendingString:@"myMovieLow.mov"];
+    
+    _isCancel = NO;
     
     [self createUI];
     
@@ -134,7 +139,7 @@
     _captureSession = [[AVCaptureSession alloc] init];
     if([_captureSession canSetSessionPreset:AVCaptureSessionPreset352x288])
     {
-        _captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
+        _captureSession.sessionPreset = AVCaptureSessionPreset640x480;
     }
     // 获得输入设备
     // 视频输入设备
@@ -143,12 +148,21 @@
     {
         NSLog(@"无法获取后置摄像头");
     }
-    //[videoCaptureDevice unlockForConfiguration];
-    [videoCaptureDevice lockForConfiguration:nil];
-    videoCaptureDevice.activeFormat = 
-    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
-    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 10)];
-    [videoCaptureDevice unlockForConfiguration];
+//    [videoCaptureDevice lockForConfiguration:nil];
+//    AVCaptureDeviceFormat *format = [[videoCaptureDevice formats] firstObject];
+////    for(AVCaptureDeviceFormat *format in [videoCaptureDevice formats])
+////    {
+////        NSLog(@"%@",format.formatDescription);
+////    }
+//    videoCaptureDevice.activeFormat = videoCaptureDevice.formats[4];
+//    NSLog(@"%@",videoCaptureDevice.activeFormat.formatDescription);
+//    CMTime max = ((AVFrameRateRange *)[videoCaptureDevice.activeFormat.videoSupportedFrameRateRanges firstObject]).maxFrameDuration;
+//    CMTime min = ((AVFrameRateRange *)[videoCaptureDevice.activeFormat.videoSupportedFrameRateRanges firstObject]).minFrameDuration;
+//    NSLog(@"%u,%d,%lld",max.flags,max.timescale,max.value);
+    
+//    [videoCaptureDevice setActiveVideoMaxFrameDuration:min];
+//    [videoCaptureDevice setActiveVideoMinFrameDuration:min];
+//    [videoCaptureDevice unlockForConfiguration];
     // 音频输入设备
     AVCaptureDevice *audioCaptureDevice = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeAudio] firstObject];
     
@@ -281,13 +295,6 @@
 //    NSDictionary *sourcePixelBufferAttributesDictionary = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:kCVPixelFormatType_32ARGB],kCVPixelBufferPixelFormatTypeKey, nil];
 }
 
-// 代理方法
-- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error
-{
-    // 结束录制后的操作
-    NSLog(@"录制结束/暂停");
-}
-
 /**
  *  改变设备属性的统一操作方法
  *
@@ -316,12 +323,176 @@
     return nil;
 }
 
-// 录制结束后的操作
-- (void)finishRecord
+#pragma mark - 视频合并、裁剪、压缩
+// 把视频裁剪成正方形并压缩
+- (void)mergeVideoWithFinished:(void (^)(void))finished
 {
-    [_captureMovieFileOutput stopRecording];//停止录制
+    //
+    AVMutableComposition *composition = [[AVMutableComposition alloc] init];//初始化剪辑对象
+    CMTime totalDuration = kCMTimeZero;//视频长度，预设为0；
+    AVAsset *asset = [AVAsset assetWithURL:[NSURL fileURLWithPath:_outputFielPath]];//用原视频初始化一个asset对象
+    AVAssetTrack *videoAssetTrack = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];//取其视频轨
+    
+    AVMutableCompositionTrack *audioTrack = [composition addMutableTrackWithMediaType:AVMediaTypeAudio preferredTrackID:kCMPersistentTrackID_Invalid];//初始化一个音轨剪辑对象
+    [audioTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration) ofTrack:[[asset tracksWithMediaType:AVMediaTypeAudio] firstObject] atTime:kCMTimeZero error:nil];//把原视频asset的音插入音轨剪辑对象，范围是视频起始到最后一秒，插入位置为0秒。
+    AVMutableCompositionTrack *videoTrack = [composition addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid];//初始化一个视频剪辑对象
+    [videoTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration) ofTrack:videoAssetTrack atTime:kCMTimeZero error:nil];//把原视频asset的视频轨插入视频剪辑对象，范围是视频起始到最后一秒，插入位置为0秒。
 
-//    // 压缩视频
+    AVMutableVideoCompositionLayerInstruction *layerInstruction = [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:videoTrack];//用视频剪辑对象创建一个layerInstruction，该对象用于裁剪视频、模糊化等操作；
+    totalDuration = CMTimeAdd(totalDuration, asset.duration);//视频总长
+    
+    // 获取剪辑区域
+    CGSize renderSize = CGSizeMake(0, 0);
+    renderSize.width = MAX(renderSize.width, videoAssetTrack.naturalSize.height);
+    renderSize.height = MAX(renderSize.height, videoAssetTrack.naturalSize.width);
+    CGFloat renderW = MIN(renderSize.width, renderSize.height);
+    CGFloat rate;
+    rate = renderW / MIN(videoAssetTrack.naturalSize.width, videoAssetTrack.naturalSize.height);
+    CGAffineTransform layerTransform = CGAffineTransformMake(videoAssetTrack.preferredTransform.a, videoAssetTrack.preferredTransform.b, videoAssetTrack.preferredTransform.c, videoAssetTrack.preferredTransform.d, videoAssetTrack.preferredTransform.tx * rate, videoAssetTrack.preferredTransform.ty * rate);
+    layerTransform = CGAffineTransformConcat(layerTransform, CGAffineTransformMake(1, 0, 0, 1, 0, -(videoAssetTrack.naturalSize.width - videoAssetTrack.naturalSize.height) / 2.0));//向上移动取中部影响
+    layerTransform = CGAffineTransformScale(layerTransform, rate, rate);//放缩，解决前后摄像结果大小不对称
+    // 把该区域设定为layerInstruction的剪辑区域
+    [layerInstruction setTransform:layerTransform atTime:kCMTimeZero];
+    [layerInstruction setOpacity:0.0 atTime:totalDuration];
+    
+    AVMutableVideoCompositionInstruction *instruction = [AVMutableVideoCompositionInstruction videoCompositionInstruction];//创建一个剪辑指令
+    instruction.timeRange = CMTimeRangeMake(kCMTimeZero, totalDuration);//时间为从视频起始到结束
+    instruction.layerInstructions = @[layerInstruction];//设定剪辑区域为上面的layerInstruction对象，放在数组中。
+    AVMutableVideoComposition *mainComposition = [AVMutableVideoComposition videoComposition];//创建一个视频剪辑对象
+    mainComposition.instructions = @[instruction];//设定剪辑指令为上面常见的剪辑指令，放在数组中
+    mainComposition.frameDuration = CMTimeMake(1, 30);//设定帧速率
+    mainComposition.renderSize = CGSizeMake(renderW, renderW);//设定渲染区域大小，高宽均为原视频的宽。
+    
+    // 导出视频
+    AVAssetExportSession *exporter = [[AVAssetExportSession alloc] initWithAsset:composition presetName:AVAssetExportPresetMediumQuality];
+    exporter.videoComposition = mainComposition;
+    exporter.outputURL = [NSURL fileURLWithPath:_outputFilePathLow];
+    exporter.outputFileType = AVFileTypeQuickTimeMovie;
+    exporter.shouldOptimizeForNetworkUse = YES;
+    [exporter exportAsynchronouslyWithCompletionHandler:^{
+        // 为何切换到主线程进行结束后操作会快很多呢？有待研究.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            finished();
+        });
+    }];
+    
+}
+// 合并和裁剪视频(包含上一个方法的功能)
+- (void)mergeAndExportVideosAtFileURLs:(NSArray *)fileURLArray
+{
+    NSError *error = nil;
+    
+    CGSize renderSize = CGSizeMake(0, 0);
+    
+    NSMutableArray *layerInstructionArray = [[NSMutableArray alloc] init];
+    
+    AVMutableComposition *mixComposition = [[AVMutableComposition alloc] init];
+    
+    CMTime totalDuration = kCMTimeZero;
+    
+    //先去assetTrack 也为了取renderSize
+    NSMutableArray *assetTrackArray = [[NSMutableArray alloc] init];
+    NSMutableArray *assetArray = [[NSMutableArray alloc] init];
+    for (NSURL *fileURL in fileURLArray) {
+        AVAsset *asset = [AVAsset assetWithURL:fileURL];
+        
+        if (!asset) {
+            continue;
+        }
+        
+        [assetArray addObject:asset];
+        
+        AVAssetTrack *assetTrack = [[asset tracksWithMediaType:AVMediaTypeVideo] objectAtIndex:0];
+        [assetTrackArray addObject:assetTrack];
+        
+        renderSize.width = MAX(renderSize.width, assetTrack.naturalSize.height);
+        renderSize.height = MAX(renderSize.height, assetTrack.naturalSize.width);
+    }
+    
+    CGFloat renderW = MIN(renderSize.width, renderSize.height);
+    
+    for (int i = 0; i < [assetArray count] && i < [assetTrackArray count]; i++) {
+        
+        AVAsset *asset = [assetArray objectAtIndex:i];
+        AVAssetTrack *assetTrack = [assetTrackArray objectAtIndex:i];
+        
+        AVMutableCompositionTrack *audioTrack = [mixComposition addMutableTrackWithMediaType:AVMediaTypeAudio preferredTrackID:kCMPersistentTrackID_Invalid];
+        [audioTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration)
+                            ofTrack:[[asset tracksWithMediaType:AVMediaTypeAudio] objectAtIndex:0]
+                             atTime:totalDuration
+                              error:nil];
+        
+        AVMutableCompositionTrack *videoTrack = [mixComposition addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid];
+        
+        [videoTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration)
+                            ofTrack:assetTrack
+                             atTime:totalDuration
+                              error:&error];
+        
+        //fix orientationissue
+        AVMutableVideoCompositionLayerInstruction *layerInstruciton = [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:videoTrack];
+        
+        totalDuration = CMTimeAdd(totalDuration, asset.duration);
+        
+        CGFloat rate;
+        rate = renderW / MIN(assetTrack.naturalSize.width, assetTrack.naturalSize.height);
+        
+        CGAffineTransform layerTransform = CGAffineTransformMake(assetTrack.preferredTransform.a, assetTrack.preferredTransform.b, assetTrack.preferredTransform.c, assetTrack.preferredTransform.d, assetTrack.preferredTransform.tx * rate, assetTrack.preferredTransform.ty * rate);
+        layerTransform = CGAffineTransformConcat(layerTransform, CGAffineTransformMake(1, 0, 0, 1, 0, -(assetTrack.naturalSize.width - assetTrack.naturalSize.height) / 2.0));//向上移动取中部影响
+        layerTransform = CGAffineTransformScale(layerTransform, rate, rate);//放缩，解决前后摄像结果大小不对称
+        
+        [layerInstruciton setTransform:layerTransform atTime:kCMTimeZero];
+        [layerInstruciton setOpacity:0.0 atTime:totalDuration];
+        
+        //data
+        [layerInstructionArray addObject:layerInstruciton];
+    }
+    
+    //export
+    AVMutableVideoCompositionInstruction *mainInstruciton = [AVMutableVideoCompositionInstruction videoCompositionInstruction];
+    mainInstruciton.timeRange = CMTimeRangeMake(kCMTimeZero, totalDuration);
+    mainInstruciton.layerInstructions = layerInstructionArray;
+    AVMutableVideoComposition *mainCompositionInst = [AVMutableVideoComposition videoComposition];
+    mainCompositionInst.instructions = @[mainInstruciton];
+    mainCompositionInst.frameDuration = CMTimeMake(1, 30);
+    mainCompositionInst.renderSize = CGSizeMake(renderW, renderW);
+    
+    AVAssetExportSession *exporter = [[AVAssetExportSession alloc] initWithAsset:mixComposition presetName:AVAssetExportPresetMediumQuality];
+    exporter.videoComposition = mainCompositionInst;
+    exporter.outputURL = [NSURL fileURLWithPath:_outputFilePathLow];
+    exporter.outputFileType = AVFileTypeMPEG4;
+    exporter.shouldOptimizeForNetworkUse = YES;
+    [exporter exportAsynchronouslyWithCompletionHandler:^{
+    }];
+}
+
+#pragma mark - AVCaptureFileOutputRecordingDelegate
+// 录制操作结束后的操作
+- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error
+{
+    // 数据写入中标记
+    _isProcessingData = NO;
+    
+    // 取消操作造成的停止录制讲不进行后面的操作
+    if(_isCancel==YES)
+    {
+        return;
+    }
+    
+    // 数据处理中的UI界面效果
+    [SVProgressHUD showWithStatus:@"处理中"];
+    _darkView = [[UIView alloc] init];
+    [self.view addSubview:_darkView];
+    [_darkView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.mas_equalTo(self.view.mas_top);
+        make.left.mas_equalTo(self.view.mas_left);
+        make.right.mas_equalTo(self.view.mas_right);
+        make.bottom.mas_equalTo(self.view.mas_bottom);
+    }];
+    _darkView.backgroundColor = [UIColor blackColor];
+    _darkView.alpha = 0.7;
+    
+    // 裁剪及压缩视频
     NSFileManager *fileManager = [[NSFileManager alloc] init];
     if([fileManager fileExistsAtPath:_outputFilePathLow])
     {
@@ -330,76 +501,25 @@
     if([fileManager fileExistsAtPath:_outputFielPath])
     {
         NSLog(@"愿文件存在");
+        [self mergeVideoWithFinished:^{
+        // 获取文件大小
+            NSFileManager *fileManager = [[NSFileManager alloc] init];
+            long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFilePathLow error:nil] fileSize];
+            double fileSizeKB = fileSizeB/1024.0;
+            // UI操作
+            _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"视频录制完成，文件大小%.2fKB",fileSizeKB] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
+            [_finishAlert show];
+            [SVProgressHUD dismiss];
+        }];
     }
-    [self lowQuailtyWithInputURL:[NSURL fileURLWithPath:_outputFielPath] outputURL:[NSURL fileURLWithPath:_outputFilePathLow] blockHandler:^(AVAssetExportSession *session) {
-        // 压缩后删除原视频
-        if([fileManager fileExistsAtPath:_outputFielPath])
-        {
-            //[fileManager removeItemAtPath:_outputFielPath error:nil];
-        }
-        if(![fileManager fileExistsAtPath:_outputFilePathLow])
-        {
-            NSLog(@"不存在");
-        }
-    }];
-    
-    // 获取文件大小
-    long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFielPath error:nil] fileSize];
-    double fileSizeKB = fileSizeB/1024.0;
-    
-    _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"文件录制完成，视频大小%.5fKB",fileSizeKB] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
-    [_finishAlert show];
+
 }
 
-// 调用此方法压缩视频
-- (void)lowQuailtyWithInputURL:(NSURL*)inputURL outputURL:(NSURL*)outputURL blockHandler:(void (^)(AVAssetExportSession*))handler
+// 录制开始时的操作
+- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didStartRecordingToOutputFileAtURL:(NSURL *)fileURL fromConnections:(NSArray *)connections
 {
-    AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:inputURL options:nil];
-
-    AVAssetExportSession *session = [[AVAssetExportSession alloc] initWithAsset:asset presetName:AVAssetExportPresetMediumQuality];
-    session.outputURL = outputURL;
-    session.outputFileType = AVFileTypeQuickTimeMovie;
-    session.shouldOptimizeForNetworkUse = YES;
-    [session exportAsynchronouslyWithCompletionHandler:^(void)
-     {
-         handler(session);
-         switch (session.status) {
-                 
-             case AVAssetExportSessionStatusUnknown:
-                 
-                 NSLog(@"AVAssetExportSessionStatusUnknown");
-                 
-                 break;
-                 
-             case AVAssetExportSessionStatusWaiting:
-                 
-                 NSLog(@"AVAssetExportSessionStatusWaiting");
-                 
-                 break;
-                 
-             case AVAssetExportSessionStatusExporting:
-                 
-                 NSLog(@"AVAssetExportSessionStatusExporting");
-                 
-                 break;
-                 
-             case AVAssetExportSessionStatusCompleted:
-                 
-                 NSLog(@"AVAssetExportSessionStatusCompleted");
-                 
-                 break;
-                 
-             case AVAssetExportSessionStatusFailed:
-                 
-                 NSLog(@"AVAssetExportSessionStatusFailed");
-                 
-                 break;
-            case AVAssetExportSessionStatusCancelled:
-                 NSLog(@"AVAssetExportSessionStatusCancelled");
-                 break;
-                 
-         }
-     }];
+    // 数据写入标记
+    _isProcessingData = YES;
 }
 
 #pragma mark - 事件响应
@@ -432,6 +552,7 @@
         }
         NSLog(@"save path is :%@",_outputFielPath);
         NSURL *fileUrl=[NSURL fileURLWithPath:_outputFielPath];
+        
         [_captureMovieFileOutput startRecordingToOutputFileURL:fileUrl recordingDelegate:self];
     }
 }
@@ -442,7 +563,8 @@
         _releaseLabel.alpha = 0;
     }];
     
-    [self finishRecord];
+    _isCancel = NO;
+    [_captureMovieFileOutput stopRecording];
 }
 
 - (void)cancelRecord:(UIButton *)button
@@ -452,6 +574,7 @@
     }];
     _filmProgress.progress = 0;
     
+    _isCancel = YES;
     [_captureMovieFileOutput stopRecording];//停止录制
     NSLog(@"ccc");
 }
@@ -471,7 +594,8 @@
     if(_filmProgress.progress==1)
     {
         [_progressTimer invalidate];
-        [self finishRecord];
+        _isCancel = NO;
+        [_captureMovieFileOutput stopRecording];
         [UIView animateWithDuration:0.2 animations:^{
             _releaseLabel.alpha = 0;
         }];
@@ -494,18 +618,20 @@
         {
             case 0:
             {
+                [_darkView removeFromSuperview];
                 _filmProgress.progress = 0;
                 break;
             }
             case 1:
             {
-                NSLog(@"111111");
+                [_darkView removeFromSuperview];
                 [self dismissViewControllerAnimated:YES completion:nil];
                 break;
             }
         }
     }
 }
+
 
 
 
