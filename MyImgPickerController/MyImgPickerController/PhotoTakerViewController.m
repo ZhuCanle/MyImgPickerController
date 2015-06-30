@@ -4,7 +4,7 @@
 //
 //  Created by lwj on 15/6/25.
 //  Copyright (c) 2015年 root. All rights reserved.
-//
+//  AVFoundation定制相机界面，裁剪视频规格，压缩视频，单双击手势的冲突解决。
 
 #import "PhotoTakerViewController.h"
 
@@ -14,22 +14,25 @@
 #import <SVProgressHUD.h>
 
 #define MAX_RECORD_TIME 15
-#define PROGRESS_MOVE_PERTIME 0.0006667
+#define PROGRESS_MOVE_PERTIME 0.0006666667
 
 @interface PhotoTakerViewController () <UIAlertViewDelegate,AVCaptureFileOutputRecordingDelegate>
 {
-    AVCaptureSession *_captureSession;//会话，负责输入和输出设备之间的数据传递
-    AVCaptureDeviceInput *_videoCaptureDeviceInput;//负责从AVCaptureDevice获得输入数据
+    AVCaptureSession *_captureSession;// 会话，负责输入和输出设备之间的数据传递
+    AVCaptureDeviceInput *_videoCaptureDeviceInput;// 负责从AVCaptureDevice获得输入数据
     AVCaptureDeviceInput *_audioCaptureDeviceInput;
-    AVCaptureMovieFileOutput *_captureMovieFileOutput;//音频输出流
-    AVCaptureVideoPreviewLayer *_captureVideoPreviewLayer;//相机拍摄预览图层
+    AVCaptureMovieFileOutput *_captureMovieFileOutput;// 音频输出流
+    AVCaptureVideoPreviewLayer *_captureVideoPreviewLayer;// 相机拍摄预览图层
     AVAssetWriter *_writer;
     AVAssetWriterInput *_writerInput;
     
     UIButton *_recordBtn;
     UIProgressView *_filmProgress;
     NSTimer *_progressTimer;
+    NSTimer *_focusTimer;
+    NSTimer *_zoomTimer;
     UILabel *_releaseLabel;
+    UILabel *zoomLabel;
     UIAlertView *_finishAlert;
     UIView *_darkView;
     NSString *_outputFielPath;// 原视频文件输出路径
@@ -73,11 +76,6 @@
     // Dispose of any resources that can be recreated.
 }
 
-- (BOOL)shouldAutorotate
-{
-    return self.enableRotation;
-}
-
 #pragma mark - 创建视图
 - (void)createUI
 {
@@ -117,8 +115,9 @@
     _filmProgress.progress = 0;
     
     // 对焦框
-    self.focusCursor = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"f096.png"]];
+    self.focusCursor = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"1352205788135321393.png"]];
     self.focusCursor.frame = CGRectMake(0, 0, 60, 60);
+    self.focusCursor.center = CGPointMake(_viewContainer.frame.size.width/2, _viewContainer.frame.size.height/2);
     self.focusCursor.alpha = 0;
     [_viewContainer addSubview:self.focusCursor];
 
@@ -130,6 +129,19 @@
         make.size.mas_equalTo(CGSizeMake(180, 23));
         make.centerX.mas_equalTo(self.view.mas_centerX);
     }];
+    
+    // 放大提示
+    zoomLabel = [self.view addLabelWithFrame:CGRectMake(0, 0, 0, 0) text:@"-双击放大/缩小-" textColor:[UIColor greenColor] fontSize:15 fontName:nil aligmentType:NSTextAlignmentCenter];
+    [zoomLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.mas_equalTo(_filmProgress.mas_bottom).with.offset(-38);
+        make.centerX.mas_equalTo(self.view.mas_centerX);
+        make.size.mas_equalTo(CGSizeMake(180, 23));
+    }];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return self.enableRotation;
 }
 
 #pragma mark - 拍摄功能
@@ -137,9 +149,9 @@
 {
     // 初始化会话
     _captureSession = [[AVCaptureSession alloc] init];
-    if([_captureSession canSetSessionPreset:AVCaptureSessionPreset352x288])
+    if([_captureSession canSetSessionPreset:AVCaptureSessionPresetHigh])
     {
-        _captureSession.sessionPreset = AVCaptureSessionPreset640x480;
+        _captureSession.sessionPreset = AVCaptureSessionPresetHigh;
     }
     // 获得输入设备
     // 视频输入设备
@@ -148,12 +160,14 @@
     {
         NSLog(@"无法获取后置摄像头");
     }
+    
+    // 修改设备的activeFormat时参考以下注释
 //    [videoCaptureDevice lockForConfiguration:nil];
 //    AVCaptureDeviceFormat *format = [[videoCaptureDevice formats] firstObject];
-////    for(AVCaptureDeviceFormat *format in [videoCaptureDevice formats])
-////    {
-////        NSLog(@"%@",format.formatDescription);
-////    }
+//    for(AVCaptureDeviceFormat *format in [videoCaptureDevice formats])
+//    {
+//        NSLog(@"%@",format.formatDescription);
+//    }
 //    videoCaptureDevice.activeFormat = videoCaptureDevice.formats[4];
 //    NSLog(@"%@",videoCaptureDevice.activeFormat.formatDescription);
 //    CMTime max = ((AVFrameRateRange *)[videoCaptureDevice.activeFormat.videoSupportedFrameRateRanges firstObject]).maxFrameDuration;
@@ -163,6 +177,7 @@
 //    [videoCaptureDevice setActiveVideoMaxFrameDuration:min];
 //    [videoCaptureDevice setActiveVideoMinFrameDuration:min];
 //    [videoCaptureDevice unlockForConfiguration];
+    
     // 音频输入设备
     AVCaptureDevice *audioCaptureDevice = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeAudio] firstObject];
     
@@ -191,13 +206,11 @@
         [_captureSession addInput:_audioCaptureDeviceInput];
 //        NSDictionary *dic = [[NSDictionary alloc] initWithObjects:@[[NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA],[NSNumber numberWithInt:240],[NSNumber numberWithInt:320]] forKeys:@[(NSString *)kCVPixelBufferPixelFormatTypeKey,(NSString *)kCVPixelBufferWidthKey,(NSString *)kCVPixelBufferHeightKey]];
 //        _captureMovieFileOutput.videoSettings = dic;
-        AVCaptureConnection *captureConnection = [_captureMovieFileOutput connectionWithMediaType:AVMediaTypeVideo];
-        captureConnection.videoOrientation = AVCaptureVideoOrientationLandscapeRight;
-        [captureConnection setVideoOrientation:AVCaptureVideoOrientationLandscapeLeft];
-        NSLog(@"%d",captureConnection.isVideoOrientationSupported);
+    AVCaptureConnection *captureConnection = [_captureMovieFileOutput connectionWithMediaType:AVMediaTypeVideo];
+        // 设置防抖模式
         if([captureConnection isVideoStabilizationSupported])
         {
-            captureConnection.preferredVideoStabilizationMode = AVCaptureVideoStabilizationModeAuto;
+            captureConnection.preferredVideoStabilizationMode = AVCaptureVideoStabilizationModeCinematic;
         }
     }
     
@@ -220,26 +233,47 @@
     // 设置是否可旋转（外部调用设置的话注释掉），添加对焦手势；
     _enableRotation = NO;
     [self addGenstureRecognizer];
+    
+    // 添加通知
+    [self addNotificationForDevice:videoCaptureDevice];
+
 }
 
--(void)addGenstureRecognizer{
-    UITapGestureRecognizer *tapGesture=[[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(tapScreen:)];
-    [self.viewContainer addGestureRecognizer:tapGesture];
+-(void)addGenstureRecognizer
+{
+    // 单击手势，用于对焦（相机必备功能）
+    UITapGestureRecognizer *singleTapGesture=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapScreen:)];
+    [singleTapGesture setNumberOfTapsRequired:1];
+    [self.viewContainer addGestureRecognizer:singleTapGesture];
+    
+    // 双击手势，调整视野（微信小视频功能）
+    UITapGestureRecognizer *doubleTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(doubleTapScreen:)];
+    [doubleTapGesture setNumberOfTapsRequired:2];
+    [self.viewContainer addGestureRecognizer:doubleTapGesture];
+    
+    // 单击手势需要双击手势不存在或失败时才能激活（防止冲突）
+    [singleTapGesture requireGestureRecognizerToFail:doubleTapGesture];
+    
 }
 
 -(void)setFocusCursorWithPoint:(CGPoint)point{
     self.focusCursor.center=point;
-    self.focusCursor.transform=CGAffineTransformMakeScale(1.5, 1.5);
-    self.focusCursor.alpha=1.0;
-    [UIView animateWithDuration:1.0 animations:^{
-        self.focusCursor.transform=CGAffineTransformIdentity;
-    } completion:^(BOOL finished) {
-        self.focusCursor.alpha=0;
-        
-    }];
+    if(_focusTimer!=nil)
+    {
+        [_focusTimer invalidate];
+    }
+    self.focusCursor.alpha = 1.0;
+    _focusTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(focusTimer:) userInfo:nil repeats:NO];
 }
 
--(void)focusWithMode:(AVCaptureFocusMode)focusMode exposureMode:(AVCaptureExposureMode)exposureMode atPoint:(CGPoint)point{
+- (void)focusTimer:(NSTimer *)timer
+{
+    self.focusCursor.alpha = 0.0;
+    [_focusTimer invalidate];
+}
+
+-(void)focusWithMode:(AVCaptureFocusMode)focusMode exposureMode:(AVCaptureExposureMode)exposureMode atPoint:(CGPoint)point
+{
     [self changeDeviceProperty:^(AVCaptureDevice *captureDevice) {
         // 判断当前的对焦模式、对焦模式是否支持，并根据手势设置新的对焦及曝光参数。
         if ([captureDevice isFocusModeSupported:focusMode]) {
@@ -263,10 +297,12 @@
     // 根据设备输出获得连接
     AVCaptureConnection *captureConnection=[_captureMovieFileOutput connectionWithMediaType:AVMediaTypeVideo];
     // 根据连接取得设备输出的数据
-    if (![_captureMovieFileOutput isRecording]) {
+    if (![_captureMovieFileOutput isRecording])
+    {
         self.enableRotation=NO;
         // 如果支持多任务则开始多任务
-        if ([[UIDevice currentDevice] isMultitaskingSupported]) {
+        if ([[UIDevice currentDevice] isMultitaskingSupported])
+        {
             self.backgroundTaskIdentifier=[[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
         }
         // 预览图层和视频方向保持一致
@@ -279,36 +315,22 @@
     else{
         [_captureMovieFileOutput stopRecording];//停止录制
     }
-//    NSError *error = nil;
-//    _writer = [[AVAssetWriter alloc] initWithURL:[NSURL fileURLWithPath:_outputFielPath] fileType:AVFileTypeQuickTimeMovie error:&error];
-//    NSParameterAssert(_writer);
-//    if(error)
-//    {
-//        NSLog(@"%@",[error localizedDescription]);
-//    }
-//    CGSize size = CGSizeMake(352, 288);
-//    NSDictionary *videoCompressionProps = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithDouble:128.0*1024.0],AVVideoAverageBitRateKey,nil];
-//    NSDictionary *videoSettings = [NSDictionary dictionaryWithObjectsAndKeys:AVVideoCodecH264, AVVideoCodecKey,[NSNumber numberWithInt:size.width], AVVideoWidthKey,[NSNumber numberWithInt:size.height],AVVideoHeightKey,videoCompressionProps, AVVideoCompressionPropertiesKey, nil];
-//    _writerInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
-//    NSParameterAssert(_writerInput);
-//    _writerInput.expectsMediaDataInRealTime = YES;
-//    NSDictionary *sourcePixelBufferAttributesDictionary = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:kCVPixelFormatType_32ARGB],kCVPixelBufferPixelFormatTypeKey, nil];
 }
 
-/**
- *  改变设备属性的统一操作方法
- *
- *  @param propertyChange 属性改变操作
- */
+
+// 改变设备属性的统一操作方法(调用时在block中修改设备属性)
 -(void)changeDeviceProperty:(void (^)(AVCaptureDevice *captureDevice))propertyChange
 {
     AVCaptureDevice *captureDevice= [_videoCaptureDeviceInput device];
     NSError *error;
-    //注意改变设备属性前一定要首先调用lockForConfiguration:调用完之后使用unlockForConfiguration方法解锁
-    if ([captureDevice lockForConfiguration:&error]) {
+    // 注意改变设备属性前一定要首先调用lockForConfiguration:调用完之后使用unlockForConfiguration方法解锁
+    if ([captureDevice lockForConfiguration:&error])
+    {
         propertyChange(captureDevice);
         [captureDevice unlockForConfiguration];
-    }else{
+    }
+    else
+    {
         NSLog(@"设置设备属性过程发生错误，错误信息：%@",error.localizedDescription);
     }
 }
@@ -321,6 +343,18 @@
         }
     }
     return nil;
+}
+
+// 添加通知，为相机的区域改变、对焦、曝光改变等做出相应的操作
+- (void)addNotificationForDevice:(AVCaptureDevice *)device
+{
+    //注意添加区域改变捕获通知必须首先设置设备允许捕获
+    [self changeDeviceProperty:^(AVCaptureDevice *captureDevice) {
+        captureDevice.subjectAreaChangeMonitoringEnabled=YES;
+    }];
+    NSNotificationCenter *notificationCenter= [NSNotificationCenter defaultCenter];
+    //捕获区域发生改变
+    [notificationCenter addObserver:self selector:@selector(areaChange:) name:AVCaptureDeviceSubjectAreaDidChangeNotification object:device];
 }
 
 #pragma mark - 视频合并、裁剪、压缩
@@ -370,10 +404,8 @@
     exporter.outputFileType = AVFileTypeQuickTimeMovie;
     exporter.shouldOptimizeForNetworkUse = YES;
     [exporter exportAsynchronouslyWithCompletionHandler:^{
-        // 为何切换到主线程进行结束后操作会快很多呢？有待研究.
-        dispatch_async(dispatch_get_main_queue(), ^{
-            finished();
-        });
+        // 如果要在此处操作UI应切换到主线程操作
+        finished();
     }];
     
 }
@@ -502,14 +534,17 @@
     {
         NSLog(@"愿文件存在");
         [self mergeVideoWithFinished:^{
-        // 获取文件大小
-            NSFileManager *fileManager = [[NSFileManager alloc] init];
-            long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFilePathLow error:nil] fileSize];
-            double fileSizeKB = fileSizeB/1024.0;
-            // UI操作
-            _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"视频录制完成，文件大小%.2fKB",fileSizeKB] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
-            [_finishAlert show];
-            [SVProgressHUD dismiss];
+            // 结束后切换到主线程操作UI
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // 获取文件大小
+                NSFileManager *fileManager = [[NSFileManager alloc] init];
+                long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFilePathLow error:nil] fileSize];
+                double fileSizeKB = fileSizeB/1024.0;
+                // UI操作
+                _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"视频录制完成，文件大小%.2fKB",fileSizeKB] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
+                [_finishAlert show];
+                [SVProgressHUD dismiss];
+            });
         }];
     }
 
@@ -602,12 +637,64 @@
     }
 }
 
--(void)tapScreen:(UITapGestureRecognizer *)tapGesture{
+-(void)tapScreen:(UITapGestureRecognizer *)tapGesture
+{
     CGPoint point= [tapGesture locationInView:self.viewContainer];
     // 将UI坐标转化为摄像头坐标
     CGPoint cameraPoint= [_captureVideoPreviewLayer captureDevicePointOfInterestForPoint:point];
     [self setFocusCursorWithPoint:point];
     [self focusWithMode:AVCaptureFocusModeAutoFocus exposureMode:AVCaptureExposureModeAutoExpose atPoint:cameraPoint];
+}
+
+- (void)doubleTapScreen:(UITapGestureRecognizer *)tapGesture
+{
+    if([_zoomTimer isValid])
+    {
+        return;
+    }
+    AVCaptureDevice *device = [_videoCaptureDeviceInput device];
+    if(device.videoZoomFactor<1.7)
+    {
+        _zoomTimer = [NSTimer scheduledTimerWithTimeInterval:0.03 target:self selector:@selector(zoomTimerAdd:) userInfo:nil repeats:YES];
+    }
+    else
+    {
+       _zoomTimer = [NSTimer scheduledTimerWithTimeInterval:0.03 target:self selector:@selector(zoomTimerReduce:) userInfo:nil repeats:YES];
+    }
+}
+
+- (void)zoomTimerAdd:(NSTimer *)timer
+{
+    [self changeDeviceProperty:^(AVCaptureDevice *captureDevice) {
+        captureDevice.videoZoomFactor += 0.07;
+        if(captureDevice.videoZoomFactor>=1.7)
+        {
+            captureDevice.videoZoomFactor = 1.7;
+            [_zoomTimer invalidate];
+        }
+    }];
+}
+
+- (void)zoomTimerReduce:(NSTimer *)timer
+{
+    [self changeDeviceProperty:^(AVCaptureDevice *captureDevice) {
+        if(captureDevice.videoZoomFactor>1.07)
+        {
+            captureDevice.videoZoomFactor -= 0.07;
+        }
+        else
+        {
+            captureDevice.videoZoomFactor = 1.0;
+            [_zoomTimer invalidate];
+        }
+    }];
+}
+
+// 设备捕获区域改变
+-(void)areaChange:(NSNotification *)notification
+{
+//     [self setFocusCursorWithPoint:];
+//     NSLog(@"捕获区域改变...");
 }
 
 - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex

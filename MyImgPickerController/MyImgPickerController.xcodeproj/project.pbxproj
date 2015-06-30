@@ -27,6 +27,7 @@
 		ED20D5081B3D42E500FAF071 /* 08341911.png in Resources */ = {isa = PBXBuildFile; fileRef = ED20D5061B3D42E400FAF071 /* 08341911.png */; };
 		ED20D5091B3D42E500FAF071 /* 0834192.png in Resources */ = {isa = PBXBuildFile; fileRef = ED20D5071B3D42E400FAF071 /* 0834192.png */; };
 		ED20D50B1B3D51BB00FAF071 /* f096.png in Resources */ = {isa = PBXBuildFile; fileRef = ED20D50A1B3D51BB00FAF071 /* f096.png */; };
+		ED2D77F81B42362C00BCC77F /* 1352205788135321393.png in Resources */ = {isa = PBXBuildFile; fileRef = ED2D77F71B42362C00BCC77F /* 1352205788135321393.png */; };
 		F73309E46A01A9D0EB4D96E4 /* libPods.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B69BD97AB6590D4A395063A2 /* libPods.a */; };
 /* End PBXBuildFile section */
 
@@ -74,6 +75,7 @@
 		ED20D5061B3D42E400FAF071 /* 08341911.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 08341911.png; sourceTree = "<group>"; };
 		ED20D5071B3D42E400FAF071 /* 0834192.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0834192.png; sourceTree = "<group>"; };
 		ED20D50A1B3D51BB00FAF071 /* f096.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = f096.png; sourceTree = "<group>"; };
+		ED2D77F71B42362C00BCC77F /* 1352205788135321393.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 1352205788135321393.png; sourceTree = "<group>"; };
 		F8156980B4BE41FA72E18357 /* Pods.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Pods.release.xcconfig; path = "Pods/Target Support Files/Pods/Pods.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -147,6 +149,7 @@
 				ED20D5071B3D42E400FAF071 /* 0834192.png */,
 				ED20D5021B3D3EA700FAF071 /* red-button-for-web.jpg */,
 				ED20D5031B3D3EA700FAF071 /* green-button-for-web.jpg */,
+				ED2D77F71B42362C00BCC77F /* 1352205788135321393.png */,
 				ED1E3F271B3EA0A600499A0D /* LibraryViewController */,
 				ED20D4FE1B3D348600FAF071 /* TG */,
 				ED1983531B3BB6C000B78838 /* MyImgPickerController */,
@@ -309,6 +312,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ED2D77F81B42362C00BCC77F /* 1352205788135321393.png in Resources */,
 				ED20D50B1B3D51BB00FAF071 /* f096.png in Resources */,
 				ED20D5081B3D42E500FAF071 /* 08341911.png in Resources */,
 				ED20D5041B3D3EA700FAF071 /* red-button-for-web.jpg in Resources */,

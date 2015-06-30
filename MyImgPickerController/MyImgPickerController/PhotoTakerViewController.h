@@ -10,8 +10,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
 
-@interface PhotoTakerViewController : UIViewController <AVCaptureFileOutputRecordingDelegate>
-
+@interface PhotoTakerViewController : UIViewController
 //@property (strong,nonatomic) AVCaptureSession *captureSession;//负责输入和输出设备之间的数据传递
 //@property (strong,nonatomic) AVCaptureDeviceInput *captureDeviceInput;//负责从AVCaptureDevice获得输入数据
 //@property (strong,nonatomic) AVCaptureMovieFileOutput *captureMovieFileOutput;//视频输出流
