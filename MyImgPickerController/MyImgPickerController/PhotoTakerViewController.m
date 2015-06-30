@@ -25,6 +25,7 @@
     AVCaptureVideoPreviewLayer *_captureVideoPreviewLayer;// 相机拍摄预览图层
     AVAssetWriter *_writer;
     AVAssetWriterInput *_writerInput;
+    AVAssetExportSession *_exporter;// 用于导出编辑过的视频
     
     UIButton *_recordBtn;
     UIProgressView *_filmProgress;
@@ -160,23 +161,22 @@
     {
         NSLog(@"无法获取后置摄像头");
     }
-    
+    // 对焦模式
+    [videoCaptureDevice lockForConfiguration:nil];
+    videoCaptureDevice.focusMode = AVCaptureFocusModeContinuousAutoFocus;
     // 修改设备的activeFormat时参考以下注释
-//    [videoCaptureDevice lockForConfiguration:nil];
-//    AVCaptureDeviceFormat *format = [[videoCaptureDevice formats] firstObject];
 //    for(AVCaptureDeviceFormat *format in [videoCaptureDevice formats])
 //    {
 //        NSLog(@"%@",format.formatDescription);
 //    }
-//    videoCaptureDevice.activeFormat = videoCaptureDevice.formats[4];
+//    videoCaptureDevice.activeFormat = videoCaptureDevice.formats[11];
 //    NSLog(@"%@",videoCaptureDevice.activeFormat.formatDescription);
 //    CMTime max = ((AVFrameRateRange *)[videoCaptureDevice.activeFormat.videoSupportedFrameRateRanges firstObject]).maxFrameDuration;
 //    CMTime min = ((AVFrameRateRange *)[videoCaptureDevice.activeFormat.videoSupportedFrameRateRanges firstObject]).minFrameDuration;
 //    NSLog(@"%u,%d,%lld",max.flags,max.timescale,max.value);
-    
-//    [videoCaptureDevice setActiveVideoMaxFrameDuration:min];
-//    [videoCaptureDevice setActiveVideoMinFrameDuration:min];
-//    [videoCaptureDevice unlockForConfiguration];
+//    [videoCaptureDevice setActiveVideoMaxFrameDuration:CMTimeMake(1, 30)];
+//    [videoCaptureDevice setActiveVideoMinFrameDuration:CMTimeMake(1, 30)];
+    [videoCaptureDevice unlockForConfiguration];
     
     // 音频输入设备
     AVCaptureDevice *audioCaptureDevice = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeAudio] firstObject];
@@ -230,16 +230,13 @@
     // 预览层添加到界面中
     [layer insertSublayer:_captureVideoPreviewLayer below:self.focusCursor.layer];
     
-    // 设置是否可旋转（外部调用设置的话注释掉），添加对焦手势；
+    // 设置是否可旋转（外部调用设置的话注释掉），添加手势、通知；
     _enableRotation = NO;
     [self addGenstureRecognizer];
-    
-    // 添加通知
     [self addNotificationForDevice:videoCaptureDevice];
-
 }
 
--(void)addGenstureRecognizer
+- (void)addGenstureRecognizer
 {
     // 单击手势，用于对焦（相机必备功能）
     UITapGestureRecognizer *singleTapGesture=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapScreen:)];
@@ -253,10 +250,10 @@
     
     // 单击手势需要双击手势不存在或失败时才能激活（防止冲突）
     [singleTapGesture requireGestureRecognizerToFail:doubleTapGesture];
-    
 }
 
--(void)setFocusCursorWithPoint:(CGPoint)point{
+- (void)setFocusCursorWithPoint:(CGPoint)point
+{
     self.focusCursor.center=point;
     if(_focusTimer!=nil)
     {
@@ -272,7 +269,7 @@
     [_focusTimer invalidate];
 }
 
--(void)focusWithMode:(AVCaptureFocusMode)focusMode exposureMode:(AVCaptureExposureMode)exposureMode atPoint:(CGPoint)point
+- (void)focusWithMode:(AVCaptureFocusMode)focusMode exposureMode:(AVCaptureExposureMode)exposureMode atPoint:(CGPoint)point
 {
     [self changeDeviceProperty:^(AVCaptureDevice *captureDevice) {
         // 判断当前的对焦模式、对焦模式是否支持，并根据手势设置新的对焦及曝光参数。
@@ -312,14 +309,15 @@
         NSURL *fileUrl=[NSURL fileURLWithPath:outputFielPath];
         [_captureMovieFileOutput startRecordingToOutputFileURL:fileUrl recordingDelegate:self];
     }
-    else{
+    else
+    {
         [_captureMovieFileOutput stopRecording];//停止录制
     }
 }
 
 
 // 改变设备属性的统一操作方法(调用时在block中修改设备属性)
--(void)changeDeviceProperty:(void (^)(AVCaptureDevice *captureDevice))propertyChange
+- (void)changeDeviceProperty:(void (^)(AVCaptureDevice *captureDevice))propertyChange
 {
     AVCaptureDevice *captureDevice= [_videoCaptureDeviceInput device];
     NSError *error;
@@ -335,7 +333,8 @@
     }
 }
 
--(AVCaptureDevice *)getCameraDeviceWithPosition:(AVCaptureDevicePosition )position{
+- (AVCaptureDevice *)getCameraDeviceWithPosition:(AVCaptureDevicePosition )position
+{
     NSArray *cameras= [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
     for (AVCaptureDevice *camera in cameras) {
         if ([camera position]==position) {
@@ -355,6 +354,7 @@
     NSNotificationCenter *notificationCenter= [NSNotificationCenter defaultCenter];
     //捕获区域发生改变
     [notificationCenter addObserver:self selector:@selector(areaChange:) name:AVCaptureDeviceSubjectAreaDidChangeNotification object:device];
+
 }
 
 #pragma mark - 视频合并、裁剪、压缩
@@ -398,17 +398,26 @@
     mainComposition.renderSize = CGSizeMake(renderW, renderW);//设定渲染区域大小，高宽均为原视频的宽。
     
     // 导出视频
-    AVAssetExportSession *exporter = [[AVAssetExportSession alloc] initWithAsset:composition presetName:AVAssetExportPresetMediumQuality];
-    exporter.videoComposition = mainComposition;
-    exporter.outputURL = [NSURL fileURLWithPath:_outputFilePathLow];
-    exporter.outputFileType = AVFileTypeQuickTimeMovie;
-    exporter.shouldOptimizeForNetworkUse = YES;
-    [exporter exportAsynchronouslyWithCompletionHandler:^{
-        // 如果要在此处操作UI应切换到主线程操作
+    _exporter = [[AVAssetExportSession alloc] initWithAsset:composition presetName:AVAssetExportPresetMediumQuality];
+    _exporter.videoComposition = mainComposition;
+    _exporter.outputURL = [NSURL fileURLWithPath:_outputFilePathLow];
+    _exporter.outputFileType = AVFileTypeQuickTimeMovie;
+    //exporter.shouldOptimizeForNetworkUse = YES;
+    [_exporter exportAsynchronouslyWithCompletionHandler:^{
+        // 该方法为异步操作，因此如果要在此Block中操作UI应切换到主线程操作
         finished();
     }];
-    
+//    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+//        while (_exporter.progress<0.99)
+//        {
+//            
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                [SVProgressHUD showProgress:_exporter.progress status:@"处理中"];
+//            });
+//        }
+//    });
 }
+
 // 合并和裁剪视频(包含上一个方法的功能)
 - (void)mergeAndExportVideosAtFileURLs:(NSArray *)fileURLArray
 {
@@ -495,6 +504,7 @@
     exporter.outputFileType = AVFileTypeMPEG4;
     exporter.shouldOptimizeForNetworkUse = YES;
     [exporter exportAsynchronouslyWithCompletionHandler:^{
+        // 该方法为异步操作，因此如果要在此Block中操作UI应切换到主线程操作
     }];
 }
 
@@ -512,7 +522,8 @@
     }
     
     // 数据处理中的UI界面效果
-    [SVProgressHUD showWithStatus:@"处理中"];
+    //[SVProgressHUD showWithStatus:@"处理中"];
+    //[SVProgressHUD showProgress:0.0 status:@"处理中"];
     _darkView = [[UIView alloc] init];
     [self.view addSubview:_darkView];
     [_darkView mas_makeConstraints:^(MASConstraintMaker *make) {
@@ -546,6 +557,17 @@
                 [SVProgressHUD dismiss];
             });
         }];
+        
+        // 在子线程中获取压缩的进度
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            while (_exporter.progress<0.99)
+            {
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [SVProgressHUD showProgress:_exporter.progress status:@"处理中"];
+                });
+            }
+        });
     }
 
 }
@@ -610,7 +632,7 @@
     _filmProgress.progress = 0;
     
     _isCancel = YES;
-    [_captureMovieFileOutput stopRecording];//停止录制
+    [_captureMovieFileOutput stopRecording];// 停止录制
     NSLog(@"ccc");
 }
 
@@ -637,7 +659,7 @@
     }
 }
 
--(void)tapScreen:(UITapGestureRecognizer *)tapGesture
+- (void)tapScreen:(UITapGestureRecognizer *)tapGesture
 {
     CGPoint point= [tapGesture locationInView:self.viewContainer];
     // 将UI坐标转化为摄像头坐标
@@ -691,7 +713,7 @@
 }
 
 // 设备捕获区域改变
--(void)areaChange:(NSNotification *)notification
+- (void)areaChange:(NSNotification *)notification
 {
 //     [self setFocusCursorWithPoint:];
 //     NSLog(@"捕获区域改变...");
