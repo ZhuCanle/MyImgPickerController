@@ -407,15 +407,6 @@
         // 该方法为异步操作，因此如果要在此Block中操作UI应切换到主线程操作
         finished();
     }];
-//    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-//        while (_exporter.progress<0.99)
-//        {
-//            
-//            dispatch_async(dispatch_get_main_queue(), ^{
-//                [SVProgressHUD showProgress:_exporter.progress status:@"处理中"];
-//            });
-//        }
-//    });
 }
 
 // 合并和裁剪视频(包含上一个方法的功能)
