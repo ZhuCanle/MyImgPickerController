@@ -1,0 +1,16 @@
+PODS:
+  - Masonry (0.6.1)
+  - SVProgressHUD (1.1.3)
+  - TGCameraViewController (2.2)
+
+DEPENDENCIES:
+  - Masonry (~> 0.6.1)
+  - SVProgressHUD (~> 1.1.3)
+  - TGCameraViewController (~> 2.2)
+
+SPEC CHECKSUMS:
+  Masonry: 4972309f2f134de9dd312f4dc4a21359b50e6caa
+  SVProgressHUD: 748080e4f36e603f6c02aec292664239df5279c1
+  TGCameraViewController: 0222c0a0d636976423066bdec6d0bafea1673a63
+
+COCOAPODS: 0.37.2

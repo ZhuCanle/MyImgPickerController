@@ -11,7 +11,6 @@
 @implementation ZCLCameraManager
 {
     AVCaptureSession *_captureSession;// 会话，负责输入和输出设备之间的数据传递
-    AVCaptureDevice *_videoCaptureDevice;
     AVCaptureDeviceInput *_videoCaptureDeviceInput;// 负责从AVCaptureDevice获得输入数据
     AVCaptureDeviceInput *_audioCaptureDeviceInput;
     AVCaptureMovieFileOutput *_captureMovieFileOutput;// 音频输出流
@@ -29,10 +28,11 @@
     UILabel *zoomLabel;
     UIAlertView *_finishAlert;
     UIView *_darkView;
-    NSString *_outputFielPath;// 原视频文件输出路径
+    UIView *_viewContainer;
+    UIImageView *_focusCursor; //聚焦光标
     NSString *_outputFilePathLow;// 压缩后视频文件输出路径
-    BOOL _isProcessingData;
     BOOL _isCancel;// 取消录制标记（取消录制操作后不进行视频裁剪和压缩处理）
+    BOOL _isProcessingData;
 }
 
 #pragma mark - API
@@ -51,6 +51,11 @@
         }
     }
     return self;
+}
+
+- (float)getExportProgress
+{
+    return _exporter.progress;
 }
 
 // 改变设备属性的统一操作方法(调用时在block中修改设备属性)
@@ -113,11 +118,11 @@
 {
     _viewContainer = view;
     // 对焦框
-    self.focusCursor = focusCursor;
-    self.focusCursor.frame = CGRectMake(0, 0, 60, 60);
-    self.focusCursor.center = CGPointMake(_viewContainer.frame.size.width/2, _viewContainer.frame.size.height/2);
-    self.focusCursor.alpha = 0;
-    [view addSubview:self.focusCursor];
+    _focusCursor = focusCursor;
+    _focusCursor.frame = CGRectMake(0, 0, 60, 60);
+    _focusCursor.center = CGPointMake(_viewContainer.frame.size.width/2, _viewContainer.frame.size.height/2);
+    _focusCursor.alpha = 0;
+    [view addSubview:_focusCursor];
 
     
     // 创建视频预览层，实时展示摄像头状态
@@ -128,7 +133,7 @@
     _captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;//填充模式
     
     // 预览层添加到界面中
-    [layer insertSublayer:_captureVideoPreviewLayer below:self.focusCursor.layer];
+    [layer insertSublayer:_captureVideoPreviewLayer below:_focusCursor.layer];
 }
 
 - (void)startVideoRunningWithOutputPath:(NSString *)path
@@ -153,8 +158,13 @@
     [_captureMovieFileOutput stopRecording];//停止录制
 }
 
-- (void)mergeVideoWithFileURLS:(NSArray *)fileURLArray ToPath:(NSString *)path preset:(NSString *)preset type:(NSString *)type cutToSqure:(BOOL)squre WithFinished:(void (^)(void))finished;
+- (void)mergeVideoWithFileURLS:(NSArray *)fileURLArray ToPath:(NSString *)path preset:(NSString *)preset type:(NSString *)type finished:(void (^)(void))finished;
 {
+    if(_isProcessingData)
+    {
+        return;
+    }
+    
     NSError *error = nil;
     
     CGSize renderSize = CGSizeMake(0, 0);
@@ -226,17 +236,14 @@
     //export
     AVMutableVideoCompositionInstruction *mainInstruciton = [AVMutableVideoCompositionInstruction videoCompositionInstruction];
     mainInstruciton.timeRange = CMTimeRangeMake(kCMTimeZero, totalDuration);
-    if(squre)
-    {
-        mainInstruciton.layerInstructions = layerInstructionArray;
-    }
+    mainInstruciton.layerInstructions = layerInstructionArray;
     AVMutableVideoComposition *mainCompositionInst = [AVMutableVideoComposition videoComposition];
     mainCompositionInst.instructions = @[mainInstruciton];
     mainCompositionInst.frameDuration = CMTimeMake(1, 30);
-    if(squre)
-    {
-        mainCompositionInst.renderSize = CGSizeMake(renderW, renderW);
-    }
+    mainCompositionInst.renderSize = CGSizeMake(renderW, renderW);
+
+    AVAssetTrack *videoTrack = [assetTrackArray firstObject];
+    mainCompositionInst.renderSize = videoTrack.naturalSize;
     
     AVAssetExportSession *exporter = [[AVAssetExportSession alloc] initWithAsset:mixComposition presetName:AVAssetExportPresetMediumQuality];
     exporter.videoComposition = mainCompositionInst;
@@ -245,13 +252,90 @@
     exporter.shouldOptimizeForNetworkUse = YES;
     [exporter exportAsynchronouslyWithCompletionHandler:^{
         // 该方法为异步操作，因此如果要在此Block中操作UI应切换到主线程操作
+        finished();
     }];
 
 }
 
-- (void)cutToSqureAndCompressVideoToPath:(NSString *)path preset:(NSString *)preset type:(NSString *)type WithFinished:(void (^)(void))finished
+- (void)compressVideoFilePath:(NSString *)path isSqure:(BOOL)squre finished:(void (^)(void))finished
 {
+    if(_isProcessingData)
+    {
+        return;
+    }
+    
+    AVMutableComposition *composition = [[AVMutableComposition alloc] init];//初始化剪辑对象
+    CMTime totalDuration = kCMTimeZero;//视频长度，预设为0；
+    AVAsset *asset = [AVAsset assetWithURL:[NSURL fileURLWithPath:_outputFielPath]];//用原视频初始化一个asset对象
+    AVAssetTrack *videoAssetTrack = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];//取其视频轨
+    
+    AVMutableCompositionTrack *audioTrack = [composition addMutableTrackWithMediaType:AVMediaTypeAudio preferredTrackID:kCMPersistentTrackID_Invalid];//初始化一个音轨剪辑对象
+    [audioTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration) ofTrack:[[asset tracksWithMediaType:AVMediaTypeAudio] firstObject] atTime:kCMTimeZero error:nil];//把原视频asset的音插入音轨剪辑对象，范围是视频起始到最后一秒，插入位置为0秒。
+    AVMutableCompositionTrack *videoTrack = [composition addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid];//初始化一个视频剪辑对象
+    [videoTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration) ofTrack:videoAssetTrack atTime:kCMTimeZero error:nil];//把原视频asset的视频轨插入视频剪辑对象，范围是视频起始到最后一秒，插入位置为0秒。
+    
+    AVMutableVideoCompositionLayerInstruction *layerInstruction = [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:videoTrack];//用视频剪辑对象创建一个layerInstruction，该对象用于裁剪视频、模糊化等操作；
+    totalDuration = CMTimeAdd(totalDuration, asset.duration);//视频总长
+    
+    // 获取剪辑区域
+    CGSize renderSize = CGSizeMake(0, 0);
+    renderSize.width = MAX(renderSize.width, videoAssetTrack.naturalSize.height);
+    renderSize.height = MAX(renderSize.height, videoAssetTrack.naturalSize.width);
+    CGFloat renderW = MIN(renderSize.width, renderSize.height);
+    CGFloat rate;
+    rate = renderW / MIN(videoAssetTrack.naturalSize.width, videoAssetTrack.naturalSize.height);
+    CGAffineTransform layerTransform = CGAffineTransformMake(videoAssetTrack.preferredTransform.a, videoAssetTrack.preferredTransform.b, videoAssetTrack.preferredTransform.c, videoAssetTrack.preferredTransform.d, videoAssetTrack.preferredTransform.tx * rate, videoAssetTrack.preferredTransform.ty * rate);
+    layerTransform = CGAffineTransformConcat(layerTransform, CGAffineTransformMake(1, 0, 0, 1, 0, -(videoAssetTrack.naturalSize.width - videoAssetTrack.naturalSize.height) / 2.0));//向上移动取中部影响
+    layerTransform = CGAffineTransformScale(layerTransform, rate, rate);//放缩，解决前后摄像结果大小不对称
+    // 把该区域设定为layerInstruction的剪辑区域
+    [layerInstruction setTransform:layerTransform atTime:kCMTimeZero];
+    [layerInstruction setOpacity:0.0 atTime:totalDuration];
+    
+    AVMutableVideoCompositionInstruction *instruction = [AVMutableVideoCompositionInstruction videoCompositionInstruction];//创建一个剪辑指令
+    instruction.timeRange = CMTimeRangeMake(kCMTimeZero, totalDuration);//时间为从视频起始到结束
+    instruction.layerInstructions = @[layerInstruction];//设定剪辑区域为上面的layerInstruction对象，放在数组中。
+    AVMutableVideoComposition *mainComposition = [AVMutableVideoComposition videoComposition];//创建一个视频剪辑对象
+    mainComposition.instructions = @[instruction];//设定剪辑指令为上面常见的剪辑指令，放在数组中
+    mainComposition.frameDuration = CMTimeMake(1, 30);//设定帧速率
+    mainComposition.renderSize = CGSizeMake(renderW, renderW);//设定渲染区域大小，高宽均为原视频的宽。
+    
+    // 导出视频
+    _exporter = [[AVAssetExportSession alloc] initWithAsset:composition presetName:AVAssetExportPresetMediumQuality];
+    _exporter.videoComposition = mainComposition;
+    _exporter.outputURL = [NSURL fileURLWithPath:path];
+    _exporter.outputFileType = AVFileTypeQuickTimeMovie;
+    //exporter.shouldOptimizeForNetworkUse = YES;
+    [_exporter exportAsynchronouslyWithCompletionHandler:^{
+        // 该方法为异步操作，因此如果要在此Block中操作UI应切换到主线程操作
+        finished();
+    }];
+}
 
+- (BOOL)isExporting
+{
+    return _isProcessingData;
+}
+
+- (void)changeDevicePosition
+{
+    if(_videoCaptureDevice.position==AVCaptureDevicePositionBack)
+    {
+        _videoCaptureDevice = [self getCameraDeviceWithPosition:AVCaptureDevicePositionFront];
+    }
+    else
+    {
+        _videoCaptureDevice = [self getCameraDeviceWithPosition:AVCaptureDevicePositionBack];
+    }
+}
+
+- (void)startRuning
+{
+    [_captureSession startRunning];
+}
+
+- (void)stopRunning
+{
+    [_captureSession stopRunning];
 }
 
 #pragma mark - 自用方法
@@ -331,8 +415,17 @@
     
     // 设置是否可旋转（外部调用设置的话注释掉），添加手势、通知；
     _enableRotation = NO;
-    [self addGenstureRecognizer];
+    // 单击手势，用于对焦（相机必备功能）
+    UITapGestureRecognizer *singleTapGesture=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapScreen:)];
+    [singleTapGesture setNumberOfTapsRequired:1];
+    [self addGenstureRecognizer:singleTapGesture];
+    // 添加通知
     [self addNotificationForDevice:_videoCaptureDevice];
+}
+
+- (void)addGenstureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+{
+    [_viewContainer addGestureRecognizer:gestureRecognizer];
 }
 
 - (AVCaptureDevice *)getCameraDeviceWithPosition:(AVCaptureDevicePosition )position
@@ -346,22 +439,6 @@
     return nil;
 }
 
-- (void)addGenstureRecognizer
-{
-    // 单击手势，用于对焦（相机必备功能）
-    UITapGestureRecognizer *singleTapGesture=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapScreen:)];
-    [singleTapGesture setNumberOfTapsRequired:1];
-    [self.viewContainer addGestureRecognizer:singleTapGesture];
-    
-    // 双击手势，调整视野（微信小视频功能）
-    UITapGestureRecognizer *doubleTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(doubleTapScreen:)];
-    [doubleTapGesture setNumberOfTapsRequired:2];
-    [self.viewContainer addGestureRecognizer:doubleTapGesture];
-    
-    // 单击手势需要双击手势不存在或失败时才能激活（防止冲突）
-    [singleTapGesture requireGestureRecognizerToFail:doubleTapGesture];
-}
-
 - (void)addNotificationForDevice:(AVCaptureDevice *)device
 {
     //注意添加区域改变捕获通知必须首先设置设备允许捕获
@@ -372,6 +449,71 @@
     //捕获区域发生改变
     [notificationCenter addObserver:self selector:@selector(areaChange:) name:AVCaptureDeviceSubjectAreaDidChangeNotification object:device];
     
+}
+
+- (void)tapScreen:(UITapGestureRecognizer *)tapGesture
+{
+    CGPoint point= [tapGesture locationInView:_viewContainer];
+    // 将UI坐标转化为摄像头坐标
+    CGPoint cameraPoint= [_captureVideoPreviewLayer captureDevicePointOfInterestForPoint:point];
+    [self setFocusCursorWithPoint:point];
+    [self focusWithMode:AVCaptureFocusModeAutoFocus exposureMode:AVCaptureExposureModeAutoExpose atPoint:cameraPoint];
+}
+
+- (void)focusWithMode:(AVCaptureFocusMode)focusMode exposureMode:(AVCaptureExposureMode)exposureMode atPoint:(CGPoint)point
+{
+    [self changeDeviceProperty:^(AVCaptureDevice *captureDevice) {
+        // 判断当前的对焦模式、对焦模式是否支持，并根据手势设置新的对焦及曝光参数。
+        if ([captureDevice isFocusModeSupported:focusMode]) {
+            [captureDevice setFocusMode:AVCaptureFocusModeAutoFocus];
+        }
+        if ([captureDevice isFocusPointOfInterestSupported]) {
+            [captureDevice setFocusPointOfInterest:point];
+        }
+        if ([captureDevice isExposureModeSupported:exposureMode]) {
+            [captureDevice setExposureMode:AVCaptureExposureModeAutoExpose];
+        }
+        if ([captureDevice isExposurePointOfInterestSupported]) {
+            [captureDevice setExposurePointOfInterest:point];
+        }
+    }];
+}
+
+- (void)setFocusCursorWithPoint:(CGPoint)point
+{
+    _focusCursor.center=point;
+    if(_focusTimer!=nil)
+    {
+        [_focusTimer invalidate];
+    }
+    _focusCursor.alpha = 1.0;
+    _focusTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(focusTimer:) userInfo:nil repeats:NO];
+}
+
+- (void)focusTimer:(NSTimer *)timer
+{
+    _focusCursor.alpha = 0.0;
+    [_focusTimer invalidate];
+}
+
+- (void)areaChange:(NSNotification *)notification
+{
+    [self.delegate didChangeAreaCameraManager:self];
+}
+
+#pragma mark - AVCaptureFileOutputRecordingDelegate
+// 录制操作结束后的操作
+- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error
+{
+    _isProcessingData = NO;
+    [self.delegate didStopVideoRunningCameraManager:self];
+}
+
+// 录制开始时的操作
+- (void)captureOutput:(AVCaptureFileOutput *)captureOutput didStartRecordingToOutputFileAtURL:(NSURL *)fileURL fromConnections:(NSArray *)connections
+{
+    _isProcessingData = YES;
+    [self.delegate didStartVideoRunningCameraManager:self];
 }
 
 @end

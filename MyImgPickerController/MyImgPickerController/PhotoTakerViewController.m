@@ -587,7 +587,7 @@
         self.enableRotation=NO;
         // 如果支持多任务则开始多任务
         if ([[UIDevice currentDevice] isMultitaskingSupported]) {
-        self.backgroundTaskIdentifier=[[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
+            self.backgroundTaskIdentifier=[[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
         }
         // 预览图层和视频方向保持一致
         captureConnection.videoOrientation=[_captureVideoPreviewLayer connection].videoOrientation;
