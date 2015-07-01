@@ -70,7 +70,7 @@ typedef enum{
 - (void)stopVideoRunning;
 
 // 压缩视频，可选择是否裁剪成正方形
-- (void)compressVideoInputFilePath:(NSString *)inPath outputFilePath:(NSString *)outPath isSqure:(BOOL)squre finished:(void (^)(void))finished;
+- (void)compressVideoInputFilePath:(NSString *)inPath outputFilePath:(NSString *)outPath preset:(NSString *)preset isSqure:(BOOL)squre finished:(void (^)(void))finished;
 // 合并、裁剪成正方形、压缩视频到指定路径，bolck中操作ui界面要切换到主线程
 - (void)mergeVideoWithFileURLS:(NSArray *)fileURLArray ToPath:(NSString *)path preset:(NSString *)preset type:(NSString *)type finished:(void (^)(void))finished;
 // 获取视频输出的进度

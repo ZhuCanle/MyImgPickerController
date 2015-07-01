@@ -275,7 +275,7 @@
 
 }
 
-- (void)compressVideoInputFilePath:(NSString *)inPath outputFilePath:(NSString *)outPath isSqure:(BOOL)squre finished:(void (^)(void))finished
+- (void)compressVideoInputFilePath:(NSString *)inPath outputFilePath:(NSString *)outPath preset:(NSString *)preset isSqure:(BOOL)squre finished:(void (^)(void))finished
 {
     if(_isProcessingData)
     {
@@ -323,7 +323,7 @@
     {
         [fileManager removeItemAtPath:outPath error:nil];
     }
-    _exporter = [[AVAssetExportSession alloc] initWithAsset:composition presetName:AVAssetExportPresetMediumQuality];
+    _exporter = [[AVAssetExportSession alloc] initWithAsset:composition presetName:preset];
     _exporter.videoComposition = mainComposition;
     _exporter.outputURL = [NSURL fileURLWithPath:outPath];
     _exporter.outputFileType = AVFileTypeQuickTimeMovie;

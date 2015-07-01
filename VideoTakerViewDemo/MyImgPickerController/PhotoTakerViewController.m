@@ -190,7 +190,7 @@
     if([fileManager fileExistsAtPath:_outputFielPath])
     {
         NSLog(@"愿文件存在");
-        [_cameraManager compressVideoInputFilePath:_outputFielPath outputFilePath:_outputFilePathLow isSqure:YES finished:^{
+        [_cameraManager compressVideoInputFilePath:_outputFielPath outputFilePath:_outputFilePathLow preset:AVAssetExportPresetMediumQuality isSqure:YES finished:^{
             // 结束后切换到主线程操作UI
             dispatch_async(dispatch_get_main_queue(), ^{
                 // 获取文件大小
