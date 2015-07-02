@@ -81,21 +81,6 @@
     _viewContainer.backgroundColor = [UIColor clearColor];
     [self.view addSubview:_viewContainer];
     
-    // 录制按钮
-    _recordBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    [_recordBtn setBackgroundImage:[UIImage imageNamed:@"08341911.png"] forState:UIControlStateNormal];
-    [self.view addSubview:_recordBtn];
-    //_record = [self.view addCustomButtonAtNormalStateWithFrame:CGRectMake(0, 0, 0, 0) imageName:@"green-button-for-web.jpg" title:nil titleColor:nil fontSize:15 fontName:nil aligmentType:NSTextAlignmentCenter];
-    [_recordBtn mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.bottom.mas_equalTo(@-110);
-        make.centerX.mas_equalTo(self.view.mas_centerX);
-        make.size.mas_equalTo(CGSizeMake(100, 100));
-    }];
-    [_recordBtn setBackgroundImage:[UIImage imageNamed:@"0834192.png"] forState:UIControlStateHighlighted];
-    [_recordBtn addTarget:self action:@selector(holdRecord:) forControlEvents:UIControlEventTouchDown];
-    [_recordBtn addTarget:self action:@selector(releaseRecord:) forControlEvents:UIControlEventTouchUpInside];
-    [_recordBtn addTarget:self action:@selector(cancelRecord:) forControlEvents:UIControlEventTouchUpOutside];
-    
     // 录制进度
     _filmProgress = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
     [self.view addSubview:_filmProgress];
@@ -123,6 +108,31 @@
         make.size.mas_equalTo(CGSizeMake(180, 23));
         make.centerX.mas_equalTo(self.view.mas_centerX);
     }];
+    
+    // 录制按钮
+    _recordBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    [_recordBtn setBackgroundImage:[UIImage imageNamed:@"08341911.png"] forState:UIControlStateNormal];
+    [self.view addSubview:_recordBtn];
+    //_record = [self.view addCustomButtonAtNormalStateWithFrame:CGRectMake(0, 0, 0, 0) imageName:@"green-button-for-web.jpg" title:nil titleColor:nil fontSize:15 fontName:nil aligmentType:NSTextAlignmentCenter];
+    [_recordBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+        if([UIScreen mainScreen].bounds.size.height==480)
+        {
+            make.top.mas_equalTo(_releaseLabel.mas_bottom).with.offset(0);
+            make.centerX.mas_equalTo(self.view.mas_centerX);
+            make.size.mas_equalTo(CGSizeMake(70, 70));
+        }
+        else
+        {
+            make.top.mas_equalTo(_releaseLabel.mas_bottom).with.offset(15);
+            make.centerX.mas_equalTo(self.view.mas_centerX);
+            make.size.mas_equalTo(CGSizeMake(100, 100));
+        }
+    }];
+
+    [_recordBtn setBackgroundImage:[UIImage imageNamed:@"0834192.png"] forState:UIControlStateHighlighted];
+    [_recordBtn addTarget:self action:@selector(holdRecord:) forControlEvents:UIControlEventTouchDown];
+    [_recordBtn addTarget:self action:@selector(releaseRecord:) forControlEvents:UIControlEventTouchUpInside];
+    [_recordBtn addTarget:self action:@selector(cancelRecord:) forControlEvents:UIControlEventTouchUpOutside];
     
     // 放大提示
     zoomLabel = [self.view addLabelWithFrame:CGRectMake(0, 0, 0, 0) text:@"-双击放大/缩小-" textColor:[UIColor greenColor] fontSize:15 fontName:nil aligmentType:NSTextAlignmentCenter];
@@ -195,7 +205,7 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 // 获取文件大小
                 NSFileManager *fileManager = [[NSFileManager alloc] init];
-                long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFilePathLow error:nil] fileSize];
+                unsigned long long fileSizeB = [[fileManager attributesOfItemAtPath:_outputFilePathLow error:nil] fileSize];
                 double fileSizeKB = fileSizeB/1024.0;
                 // UI操作
                 _finishAlert = [[UIAlertView alloc] initWithTitle:nil message:[NSString stringWithFormat:@"视频录制完成，文件大小%.2fKB",fileSizeKB] delegate:self cancelButtonTitle:@"重新录制" otherButtonTitles:@"退出",nil];
@@ -208,7 +218,6 @@
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             while ([_cameraManager getExportProgress]<0.99)
             {
-                
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [SVProgressHUD showProgress:[_cameraManager getExportProgress] status:@"处理中"];
                 });

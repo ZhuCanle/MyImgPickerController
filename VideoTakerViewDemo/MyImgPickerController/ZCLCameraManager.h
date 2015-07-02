@@ -5,7 +5,6 @@
 //  Created by lwj on 15/7/1.
 //  Copyright (c) 2015年 ZCL. All rights reserved.
 //
-
 /*
  本类利用AVFoundation和AssetsLibrary框架封装了照相机的调用和设置
  目前尚未包含拍照功能，只有录像功能。
@@ -64,9 +63,8 @@ typedef enum{
 // 开始、结束会话
 - (void)startRuning;
 - (void)stopRunning;
-// 开始录制视频
+// 开始、停止录制视频
 - (void)startVideoRunningWithOutputPath:(NSString *)path;
-// 停止录制视频
 - (void)stopVideoRunning;
 
 // 压缩视频，可选择是否裁剪成正方形

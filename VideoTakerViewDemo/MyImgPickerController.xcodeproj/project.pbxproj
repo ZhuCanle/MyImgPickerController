@@ -466,7 +466,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 8.3;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PROVISIONING_PROFILE = "b7f272e2-f307-47b0-832c-e1ab14479133";
+				PROVISIONING_PROFILE = "55b628d5-1e49-4e57-8138-5b5ee9e54811";
 				SDKROOT = iphoneos8.3;
 			};
 			name = Debug;
@@ -504,7 +504,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 8.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
-				PROVISIONING_PROFILE = "b7f272e2-f307-47b0-832c-e1ab14479133";
+				PROVISIONING_PROFILE = "55b628d5-1e49-4e57-8138-5b5ee9e54811";
 				SDKROOT = iphoneos8.3;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -519,7 +519,7 @@
 				INFOPLIST_FILE = MyImgPickerController/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE = "b7f272e2-f307-47b0-832c-e1ab14479133";
+				PROVISIONING_PROFILE = "55b628d5-1e49-4e57-8138-5b5ee9e54811";
 				SDKROOT = iphoneos8.3;
 			};
 			name = Debug;
@@ -533,7 +533,7 @@
 				INFOPLIST_FILE = MyImgPickerController/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE = "b7f272e2-f307-47b0-832c-e1ab14479133";
+				PROVISIONING_PROFILE = "55b628d5-1e49-4e57-8138-5b5ee9e54811";
 				SDKROOT = iphoneos8.3;
 			};
 			name = Release;
